@@ -1,0 +1,472 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+   CHIMERA Base Styles
+   ============================================================================= */
+
+:root {
+  --chimera-dark: #0a0a0f;
+  --chimera-darker: #050508;
+  --chimera-accent: #00d4aa;
+  --chimera-accent-dim: #00a888;
+  --chimera-gold: #ffd700;
+  --chimera-purple: #8b5cf6;
+  --chimera-red: #ef4444;
+  --chimera-green: #22c55e;
+  --chimera-blue: #3b82f6;
+  --chimera-muted: #6b7280;
+  --chimera-border: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--chimera-darker);
+  color: #e5e7eb;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =============================================================================
+   Background with Chimera Image
+   ============================================================================= */
+
+.chimera-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url('/chimera.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.15;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.chimera-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 5, 8, 0.7) 0%,
+    rgba(5, 5, 8, 0.3) 30%,
+    rgba(5, 5, 8, 0.3) 70%,
+    rgba(5, 5, 8, 0.9) 100%
+  );
+}
+
+/* =============================================================================
+   Glass Card Components
+   ============================================================================= */
+
+.glass-card {
+  background: rgba(10, 10, 15, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--chimera-border);
+  border-radius: 12px;
+}
+
+.glass-card-hover {
+  transition: all 0.2s ease;
+}
+
+.glass-card-hover:hover {
+  background: rgba(10, 10, 15, 0.9);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+/* =============================================================================
+   Button Components
+   ============================================================================= */
+
+.btn-primary {
+  @apply px-6 py-3 rounded-lg font-medium transition-all duration-200;
+  background: linear-gradient(135deg, var(--chimera-accent) 0%, var(--chimera-accent-dim) 100%);
+  color: var(--chimera-darker);
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0, 212, 170, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  @apply px-6 py-3 rounded-lg font-medium transition-all duration-200;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--chimera-border);
+  color: #e5e7eb;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.btn-danger {
+  @apply px-6 py-3 rounded-lg font-medium transition-all duration-200;
+  background: linear-gradient(135deg, var(--chimera-red) 0%, #dc2626 100%);
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
+}
+
+/* =============================================================================
+   Input Components
+   ============================================================================= */
+
+.input-field {
+  @apply w-full px-4 py-3 rounded-lg transition-all duration-200;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--chimera-border);
+  color: #e5e7eb;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--chimera-accent);
+  box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+}
+
+.input-field::placeholder {
+  color: var(--chimera-muted);
+}
+
+.input-label {
+  @apply block text-sm font-medium mb-2;
+  color: #9ca3af;
+}
+
+/* =============================================================================
+   Price Ladder Styling
+   ============================================================================= */
+
+.price-cell {
+  @apply px-3 py-2 text-center font-mono text-sm rounded;
+  transition: all 0.15s ease;
+}
+
+.price-back {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.price-back:hover {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.1) 100%);
+}
+
+.price-lay {
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.05) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.price-lay:hover {
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.3) 0%, rgba(239, 68, 68, 0.1) 100%);
+  cursor: pointer;
+}
+
+.price-value {
+  @apply text-lg font-semibold;
+}
+
+.price-size {
+  @apply text-xs opacity-70;
+}
+
+/* =============================================================================
+   Market Card Styling
+   ============================================================================= */
+
+.market-card {
+  @apply glass-card p-4 cursor-pointer;
+  transition: all 0.2s ease;
+}
+
+.market-card:hover {
+  border-color: var(--chimera-accent);
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.1);
+}
+
+.market-card.selected {
+  border-color: var(--chimera-accent);
+  background: rgba(0, 212, 170, 0.05);
+}
+
+.market-venue {
+  @apply text-xs font-medium uppercase tracking-wider;
+  color: var(--chimera-accent);
+}
+
+.market-name {
+  @apply text-lg font-semibold mt-1;
+  color: #f3f4f6;
+}
+
+.market-time {
+  @apply text-sm font-mono mt-2;
+  color: var(--chimera-muted);
+}
+
+/* =============================================================================
+   Runner Row Styling
+   ============================================================================= */
+
+.runner-row {
+  @apply flex items-center gap-4 p-3 rounded-lg;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.runner-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--chimera-border);
+}
+
+.runner-row.selected {
+  background: rgba(0, 212, 170, 0.05);
+  border-color: var(--chimera-accent);
+}
+
+.runner-number {
+  @apply w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.runner-name {
+  @apply flex-1 font-medium;
+}
+
+.runner-jockey {
+  @apply text-xs;
+  color: var(--chimera-muted);
+}
+
+/* =============================================================================
+   Status Indicators
+   ============================================================================= */
+
+.status-badge {
+  @apply inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.status-connected {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--chimera-green);
+}
+
+.status-disconnected {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--chimera-red);
+}
+
+.status-loading {
+  background: rgba(255, 215, 0, 0.15);
+  color: var(--chimera-gold);
+}
+
+/* =============================================================================
+   Animations
+   ============================================================================= */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(0, 212, 170, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 212, 170, 0.5);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.4s ease-out;
+}
+
+/* =============================================================================
+   Scrollbar Styling
+   ============================================================================= */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* =============================================================================
+   Utility Classes
+   ============================================================================= */
+
+.text-accent {
+  color: var(--chimera-accent);
+}
+
+.text-gold {
+  color: var(--chimera-gold);
+}
+
+.text-muted {
+  color: var(--chimera-muted);
+}
+
+.border-accent {
+  border-color: var(--chimera-accent);
+}
+
+.bg-surface {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* =============================================================================
+   Loading States
+   ============================================================================= */
+
+.skeleton {
+  @apply rounded;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* =============================================================================
+   Bet Slip Styling
+   ============================================================================= */
+
+.bet-slip {
+  @apply glass-card p-6;
+  border-color: var(--chimera-accent);
+  box-shadow: 0 0 30px rgba(0, 212, 170, 0.1);
+}
+
+.bet-slip-header {
+  @apply flex items-center justify-between pb-4 mb-4;
+  border-bottom: 1px solid var(--chimera-border);
+}
+
+.liability-display {
+  @apply p-3 rounded-lg text-center;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.profit-display {
+  @apply p-3 rounded-lg text-center;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+/* =============================================================================
+   Toast Notifications
+   ============================================================================= */
+
+.toast {
+  @apply fixed bottom-4 right-4 p-4 rounded-lg shadow-xl z-50;
+  background: rgba(10, 10, 15, 0.95);
+  border: 1px solid var(--chimera-border);
+  backdrop-filter: blur(20px);
+  animation: slideUp 0.3s ease-out;
+}
+
+.toast-success {
+  border-left: 3px solid var(--chimera-green);
+}
+
+.toast-error {
+  border-left: 3px solid var(--chimera-red);
+}
+
+.toast-info {
+  border-left: 3px solid var(--chimera-accent);
+}

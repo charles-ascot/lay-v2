@@ -1,0 +1,6 @@
+IMPORTANT: Place your chimera.png image file in this directory.
+
+The chimera.png image should be placed here for the background to display correctly.
+
+Simply copy your chimera.png file to:
+frontend/public/chimera.png
