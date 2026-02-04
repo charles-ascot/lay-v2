@@ -466,7 +466,9 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:3000",
         "https://*.pages.dev",
-        "https://chimera-lay.pages.dev"
+        "https://chimera-lay.pages.dev",
+        "https://lay2.thync.online",
+        "https://*.thync.online"
     ],
     allow_credentials=True,
     allow_methods=["*"],
