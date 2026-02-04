@@ -1,6 +1,7 @@
 /**
  * CHIMERA Dashboard
  * Main trading interface
+ * UPDATED: Added Account Balance and Open Orders panels
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -8,6 +9,8 @@ import { useMarketsStore, useBetSlipStore, useToastStore } from '../store';
 import MarketList from './MarketList';
 import MarketView from './MarketView';
 import BetSlip from './BetSlip';
+import AccountBalance from './AccountBalance';
+import OpenOrders from './OpenOrders';
 
 // Refresh interval for prices (10 seconds for delayed data)
 const PRICE_REFRESH_INTERVAL = 10000;
@@ -25,6 +28,7 @@ function Dashboard({ onLogout }) {
   const { selection } = useBetSlipStore();
   const { addToast } = useToastStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showRightPanel, setShowRightPanel] = useState(true);
 
   // Fetch market catalogue on mount
   useEffect(() => {
@@ -135,12 +139,31 @@ function Dashboard({ onLogout }) {
           )}
         </main>
 
-        {/* Bet Slip Sidebar */}
-        {selection && (
-          <aside className="w-96 border-l border-chimera-border p-6 overflow-y-auto animate-slideUp">
-            <BetSlip />
-          </aside>
-        )}
+        {/* Right Panel - Account, Orders, BetSlip */}
+        <aside className="w-96 border-l border-chimera-border overflow-y-auto flex flex-col">
+          {/* Toggle Button */}
+          <button
+            onClick={() => setShowRightPanel(!showRightPanel)}
+            className="md:hidden absolute right-0 top-1/2 transform -translate-y-1/2 bg-chimera-surface p-2 rounded-l-lg"
+          >
+            {showRightPanel ? '→' : '←'}
+          </button>
+
+          <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showRightPanel ? '' : 'hidden md:block'}`}>
+            {/* Account Balance */}
+            <AccountBalance />
+
+            {/* Open Orders */}
+            <OpenOrders />
+
+            {/* Bet Slip - shows when selection is made */}
+            {selection && (
+              <div className="animate-slideUp">
+                <BetSlip />
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
 /**
  * CHIMERA State Management
  * Zustand store for application state
+ * UPDATED: Added Account and Orders stores
  */
 
 import { create } from 'zustand';
-import { authAPI, marketsAPI, ordersAPI, isSessionValid, clearSession } from '../services/api';
+import { authAPI, marketsAPI, ordersAPI, accountAPI, isSessionValid, clearSession } from '../services/api';
 
 /**
  * Authentication Store
@@ -243,6 +244,81 @@ export const useBetSlipStore = create((set, get) => ({
   getProfit: () => {
     const { stake } = get();
     return parseFloat(stake) || 0;
+  },
+
+  clearError: () => set({ error: null }),
+}));
+
+/**
+ * Orders Store - NEW
+ */
+export const useOrdersStore = create((set, get) => ({
+  orders: [],
+  isLoading: false,
+  isCancelling: false,
+  error: null,
+  lastUpdated: null,
+
+  fetchOrders: async (marketIds = null) => {
+    set({ isLoading: true, error: null });
+    try {
+      const result = await ordersAPI.getCurrentOrders(marketIds);
+      const orders = result?.currentOrders || [];
+      set({ 
+        orders,
+        isLoading: false,
+        lastUpdated: new Date().toISOString()
+      });
+      return orders;
+    } catch (error) {
+      const message = error.response?.data?.error || error.message || 'Failed to fetch orders';
+      set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  cancelOrder: async (marketId, betId = null) => {
+    set({ isCancelling: true, error: null });
+    try {
+      const result = await ordersAPI.cancelOrder(marketId, betId);
+      // Refresh orders after cancel
+      await get().fetchOrders();
+      set({ isCancelling: false });
+      return result;
+    } catch (error) {
+      const message = error.response?.data?.error || error.message || 'Failed to cancel order';
+      set({ error: message, isCancelling: false });
+      throw error;
+    }
+  },
+
+  clearError: () => set({ error: null }),
+}));
+
+/**
+ * Account Store - NEW
+ */
+export const useAccountStore = create((set) => ({
+  balance: null,
+  isLoading: false,
+  error: null,
+  lastUpdated: null,
+
+  fetchBalance: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const balance = await accountAPI.getBalance();
+      set({ 
+        balance,
+        isLoading: false,
+        lastUpdated: new Date().toISOString()
+      });
+      return balance;
+    } catch (error) {
+      const message = error.response?.data?.error || error.message || 'Failed to fetch balance';
+      set({ error: message, isLoading: false });
+      throw error;
+    }
   },
 
   clearError: () => set({ error: null }),

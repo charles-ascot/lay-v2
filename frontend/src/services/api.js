@@ -1,75 +1,40 @@
 /**
- * CHIMERA API Client
- * Handles all communication with the FastAPI backend
+ * CHIMERA API Service
+ * Betfair Exchange API client
+ * UPDATED: Added account balance and orders endpoints
  */
 
 import axios from 'axios';
 
-// API base URL - configured for Cloud Run deployment
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+// API Base URL from environment
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-// Create axios instance with default configuration
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+// Session storage keys
+const SESSION_TOKEN_KEY = 'chimera_session_token';
+const SESSION_EXPIRY_KEY = 'chimera_session_expiry';
+
+/**
+ * Axios instance with interceptors
+ */
+const api = axios.create({
+  baseURL: API_BASE,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Session token storage key
-const SESSION_TOKEN_KEY = 'chimera_session_token';
-const SESSION_EXPIRY_KEY = 'chimera_session_expiry';
-
-/**
- * Get stored session token
- */
-export const getSessionToken = () => {
-  return sessionStorage.getItem(SESSION_TOKEN_KEY);
-};
-
-/**
- * Store session token with expiry
- */
-export const setSessionToken = (token, expiresAt) => {
-  sessionStorage.setItem(SESSION_TOKEN_KEY, token);
-  sessionStorage.setItem(SESSION_EXPIRY_KEY, expiresAt);
-};
-
-/**
- * Clear session data
- */
-export const clearSession = () => {
-  sessionStorage.removeItem(SESSION_TOKEN_KEY);
-  sessionStorage.removeItem(SESSION_EXPIRY_KEY);
-};
-
-/**
- * Check if session is valid
- */
-export const isSessionValid = () => {
+// Request interceptor - add auth token
+api.interceptors.request.use((config) => {
   const token = getSessionToken();
-  const expiry = sessionStorage.getItem(SESSION_EXPIRY_KEY);
-  
-  if (!token || !expiry) return false;
-  
-  return new Date(expiry) > new Date();
-};
+  if (token) {
+    config.headers['X-Authentication'] = token;
+  }
+  return config;
+});
 
-// Request interceptor - add auth header
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = getSessionToken();
-    if (token) {
-      config.headers['X-Authentication'] = token;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Response interceptor - handle errors
-apiClient.interceptors.response.use(
+// Response interceptor - handle auth errors
+api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
@@ -81,47 +46,58 @@ apiClient.interceptors.response.use(
 );
 
 /**
+ * Session Management
+ */
+export function getSessionToken() {
+  return localStorage.getItem(SESSION_TOKEN_KEY);
+}
+
+export function setSession(token, expiresAt) {
+  localStorage.setItem(SESSION_TOKEN_KEY, token);
+  localStorage.setItem(SESSION_EXPIRY_KEY, expiresAt);
+}
+
+export function clearSession() {
+  localStorage.removeItem(SESSION_TOKEN_KEY);
+  localStorage.removeItem(SESSION_EXPIRY_KEY);
+}
+
+export function isSessionValid() {
+  const token = getSessionToken();
+  const expiry = localStorage.getItem(SESSION_EXPIRY_KEY);
+  
+  if (!token || !expiry) return false;
+  
+  const expiryDate = new Date(expiry);
+  return expiryDate > new Date();
+}
+
+/**
  * Authentication API
  */
 export const authAPI = {
-  /**
-   * Login to Betfair Exchange
-   */
-  login: async (username, password) => {
-    const response = await apiClient.post('/api/auth/login', {
-      username,
-      password,
-    });
-    
+  async login(username, password) {
+    const response = await api.post('/api/auth/login', { username, password });
     const { session_token, expires_at } = response.data;
-    setSessionToken(session_token, expires_at);
-    
+    setSession(session_token, expires_at);
     return response.data;
   },
 
-  /**
-   * Keep session alive
-   */
-  keepAlive: async () => {
-    const response = await apiClient.post('/api/auth/keepalive');
-    
-    if (response.data.expires_at) {
-      const token = getSessionToken();
-      setSessionToken(token, response.data.expires_at);
-    }
-    
-    return response.data;
-  },
-
-  /**
-   * Logout and terminate session
-   */
-  logout: async () => {
+  async logout() {
     try {
-      await apiClient.post('/api/auth/logout');
+      await api.post('/api/auth/logout');
     } finally {
       clearSession();
     }
+  },
+
+  async keepAlive() {
+    const response = await api.post('/api/auth/keepalive');
+    if (response.data.expires_at) {
+      const token = getSessionToken();
+      setSession(token, response.data.expires_at);
+    }
+    return response.data;
   },
 };
 
@@ -129,12 +105,9 @@ export const authAPI = {
  * Markets API
  */
 export const marketsAPI = {
-  /**
-   * Get market catalogue for horse racing
-   */
-  getCatalogue: async (params = {}) => {
-    const response = await apiClient.post('/api/markets/catalogue', {
-      event_type_ids: params.eventTypeIds || ['7'],
+  async getCatalogue(params = {}) {
+    const response = await api.post('/api/markets/catalogue', {
+      event_type_ids: params.eventTypeIds || ['7'], // Horse racing
       market_type_codes: params.marketTypeCodes || ['WIN'],
       max_results: params.maxResults || 100,
       from_time: params.fromTime,
@@ -143,64 +116,53 @@ export const marketsAPI = {
     return response.data;
   },
 
-  /**
-   * Get market book with prices
-   */
-  getBook: async (marketIds, options = {}) => {
-    const response = await apiClient.post('/api/markets/book', {
-      market_ids: Array.isArray(marketIds) ? marketIds : [marketIds],
-      price_projection: options.priceProjection || ['EX_BEST_OFFERS'],
-      virtualise: options.virtualise !== false,
+  async getBook(marketIds, priceProjection = ['EX_BEST_OFFERS']) {
+    const response = await api.post('/api/markets/book', {
+      market_ids: marketIds,
+      price_projection: priceProjection,
+      virtualise: true,
     });
     return response.data;
   },
 };
 
 /**
- * Orders API
+ * Orders API - UPDATED
  */
 export const ordersAPI = {
-  /**
-   * Place a lay bet
-   */
-  placeLay: async (marketId, selectionId, odds, stake) => {
-    const response = await apiClient.post('/api/orders/place', {
+  async placeLay(marketId, selectionId, odds, stake) {
+    const response = await api.post('/api/orders/place', {
       market_id: marketId,
       selection_id: selectionId,
-      odds: parseFloat(odds),
-      stake: parseFloat(stake),
+      odds: odds,
+      stake: stake,
       persistence_type: 'LAPSE',
     });
     return response.data;
   },
 
-  /**
-   * Cancel orders
-   */
-  cancel: async (marketId, betId = null) => {
-    const response = await apiClient.post('/api/orders/cancel', null, {
-      params: { market_id: marketId, bet_id: betId },
-    });
+  async getCurrentOrders(marketIds = null) {
+    const params = marketIds ? `?market_ids=${marketIds.join(',')}` : '';
+    const response = await api.get(`/api/orders/current${params}`);
     return response.data;
   },
 
-  /**
-   * Get current unmatched orders
-   */
-  getCurrent: async (marketIds = null) => {
-    const response = await apiClient.get('/api/orders/current', {
-      params: { market_ids: marketIds?.join(',') },
+  async cancelOrder(marketId, betId = null) {
+    const response = await api.post('/api/orders/cancel', null, {
+      params: { market_id: marketId, bet_id: betId }
     });
     return response.data;
   },
 };
 
 /**
- * Health check
+ * Account API - NEW
  */
-export const healthCheck = async () => {
-  const response = await apiClient.get('/health');
-  return response.data;
+export const accountAPI = {
+  async getBalance() {
+    const response = await api.get('/api/account/balance');
+    return response.data;
+  },
 };
 
-export default apiClient;
+export default api;

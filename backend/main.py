@@ -2,22 +2,21 @@
 CHIMERA Lay Betting Backend
 FastAPI application for Betfair Exchange integration
 Project: chimera-v4
+UPDATED: Added account balance endpoint
 """
 
 import os
-import gzip
-import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
+from urllib.parse import urlencode
 
 import httpx
-from fastapi import FastAPI, HTTPException, Depends, Header, status
+from fastapi import FastAPI, HTTPException, Depends, Header, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from functools import wraps
 import asyncio
 
 # Configure logging
@@ -35,13 +34,14 @@ class Config:
     BETFAIR_KEEPALIVE_URL: str = "https://identitysso.betfair.com/api/keepAlive"
     BETFAIR_LOGOUT_URL: str = "https://identitysso.betfair.com/api/logout"
     BETFAIR_API_URL: str = "https://api.betfair.com/exchange/betting/json-rpc/v1"
+    BETFAIR_ACCOUNT_URL: str = "https://api.betfair.com/exchange/account/json-rpc/v1"
     
     # Rate limiting: max 5 requests per market per second
     RATE_LIMIT_REQUESTS: int = 5
     RATE_LIMIT_WINDOW: float = 1.0
     
-    # Session timeout (4 hours for international exchange)
-    SESSION_TIMEOUT_HOURS: int = 4
+    # Session timeout (12 hours for international exchange)
+    SESSION_TIMEOUT_HOURS: int = 12
 
 config = Config()
 
@@ -133,6 +133,51 @@ class RateLimiter:
 rate_limiter = RateLimiter(config.RATE_LIMIT_REQUESTS, config.RATE_LIMIT_WINDOW)
 
 # =============================================================================
+# Betfair Error Codes
+# =============================================================================
+
+BETFAIR_ERROR_MESSAGES = {
+    "INVALID_USERNAME_OR_PASSWORD": "Invalid username or password",
+    "ACCOUNT_NOW_LOCKED": "Account has been locked",
+    "ACCOUNT_ALREADY_LOCKED": "Account is already locked",
+    "PENDING_AUTH": "Pending authentication required",
+    "TELBET_TERMS_CONDITIONS_NA": "Telbet terms not accepted",
+    "DUPLICATE_CARDS": "Duplicate cards on account",
+    "SECURITY_QUESTION_WRONG_3X": "Security question answered incorrectly 3 times",
+    "KYC_SUSPEND": "Account suspended for KYC verification",
+    "SUSPENDED": "Account is suspended",
+    "CLOSED": "Account is closed",
+    "SELF_EXCLUDED": "Account is self-excluded",
+    "INVALID_CONNECTIVITY_TO_REGULATOR_DK": "Cannot connect to Danish regulator",
+    "INVALID_CONNECTIVITY_TO_REGULATOR_IT": "Cannot connect to Italian regulator",
+    "NOT_AUTHORIZED_BY_REGULATOR_DK": "Not authorized in Denmark",
+    "NOT_AUTHORIZED_BY_REGULATOR_IT": "Not authorized in Italy",
+    "SECURITY_RESTRICTED_LOCATION": "Access restricted from your location",
+    "BETTING_RESTRICTED_LOCATION": "Betting restricted from your location",
+    "TRADING_MASTER": "Trading Master account",
+    "TRADING_MASTER_SUSPENDED": "Trading Master account suspended",
+    "AGENT_CLIENT_MASTER": "Agent Client Master account",
+    "AGENT_CLIENT_MASTER_SUSPENDED": "Agent Client Master suspended",
+    "DANISH_AUTHORIZATION_REQUIRED": "Danish authorization required",
+    "SPAIN_MIGRATION_REQUIRED": "Spain migration required",
+    "DENMARK_MIGRATION_REQUIRED": "Denmark migration required",
+    "SPANISH_TERMS_ACCEPTANCE_REQUIRED": "Spanish terms must be accepted",
+    "ITALIAN_CONTRACT_ACCEPTANCE_REQUIRED": "Italian contract must be accepted",
+    "CERT_AUTH_REQUIRED": "Certificate authentication required",
+    "CHANGE_PASSWORD_REQUIRED": "Password change required",
+    "PERSONAL_MESSAGE_REQUIRED": "Personal message required",
+    "INTERNATIONAL_TERMS_ACCEPTANCE_REQUIRED": "International terms must be accepted",
+    "EMAIL_LOGIN_NOT_ALLOWED": "Email login not enabled for this account",
+    "MULTIPLE_USERS_WITH_SAME_CREDENTIAL": "Multiple users with same credentials",
+    "ACCOUNT_PENDING_PASSWORD_CHANGE": "Password change required to reactivate",
+    "TEMPORARY_BAN_TOO_MANY_REQUESTS": "Too many login attempts. Banned for 20 minutes",
+    "ITALIAN_PROFILING_ACCEPTANCE_REQUIRED": "Italian profiling terms must be accepted",
+    "AUTHORIZED_ONLY_FOR_DOMAIN_RO": "Account only authorized for .ro domain",
+    "AUTHORIZED_ONLY_FOR_DOMAIN_SE": "Account only authorized for .se domain",
+    "ACTIONS_REQUIRED": "Please login to betfair.com to complete required actions",
+}
+
+# =============================================================================
 # Betfair API Client
 # =============================================================================
 
@@ -173,20 +218,44 @@ class BetfairClient:
         """
         Authenticate with Betfair using interactive login.
         Returns session token on success.
+        
+        Per Betfair API docs:
+        - Content-Type must be application/x-www-form-urlencoded
+        - Body must be form-encoded, not JSON
         """
         try:
+            # Form-encoded body per Betfair API spec
+            body = urlencode({
+                "username": username,
+                "password": password
+            })
+            
+            headers = {
+                "Accept": "application/json",
+                "X-Application": self.app_key,
+                "Content-Type": "application/x-www-form-urlencoded"
+            }
+            
+            logger.info(f"Attempting login for user: {username}")
+            logger.info(f"Login URL: {config.BETFAIR_LOGIN_URL}")
+            
             response = await self.client.post(
                 config.BETFAIR_LOGIN_URL,
-                data={
-                    "username": username,
-                    "password": password
-                },
-                headers={
-                    "X-Application": self.app_key,
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Accept": "application/json"
-                }
+                content=body,
+                headers=headers
             )
+            
+            logger.info(f"Login response status code: {response.status_code}")
+            
+            # Check for non-JSON response (blocked/error page)
+            content_type = response.headers.get("content-type", "")
+            if "application/json" not in content_type:
+                logger.error(f"Non-JSON response: {content_type}")
+                logger.error(f"Response body: {response.text[:500]}")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Betfair returned non-JSON response. May be geo-blocked or service unavailable."
+                )
             
             result = response.json()
             logger.info(f"Login response status: {result.get('status')}")
@@ -200,10 +269,27 @@ class BetfairClient:
                         timedelta(hours=config.SESSION_TIMEOUT_HOURS)
                     ).isoformat()
                 }
+            elif result.get("status") == "LIMITED_ACCESS":
+                # Can login but restrictions apply
+                return {
+                    "session_token": result.get("token"),
+                    "status": "LIMITED_ACCESS",
+                    "expires_at": (
+                        datetime.now(timezone.utc) + 
+                        timedelta(hours=config.SESSION_TIMEOUT_HOURS)
+                    ).isoformat(),
+                    "warning": "Account has limited access"
+                }
             else:
+                error_code = result.get("error", "UNKNOWN_ERROR")
+                error_message = BETFAIR_ERROR_MESSAGES.get(
+                    error_code, 
+                    f"Authentication failed: {error_code}"
+                )
+                logger.error(f"Login failed: {error_code} - {error_message}")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=result.get("error", "Authentication failed")
+                    detail=error_message
                 )
                 
         except httpx.RequestError as e:
@@ -216,9 +302,15 @@ class BetfairClient:
     async def keep_alive(self, session_token: str) -> Dict[str, Any]:
         """Extend session lifetime."""
         try:
+            headers = {
+                "Accept": "application/json",
+                "X-Application": self.app_key,
+                "X-Authentication": session_token
+            }
+            
             response = await self.client.get(
                 config.BETFAIR_KEEPALIVE_URL,
-                headers=self._get_headers(session_token)
+                headers=headers
             )
             result = response.json()
             
@@ -247,9 +339,15 @@ class BetfairClient:
     async def logout(self, session_token: str) -> Dict[str, Any]:
         """Terminate session."""
         try:
+            headers = {
+                "Accept": "application/json",
+                "X-Application": self.app_key,
+                "X-Authentication": session_token
+            }
+            
             response = await self.client.get(
                 config.BETFAIR_LOGOUT_URL,
-                headers=self._get_headers(session_token)
+                headers=headers
             )
             return response.json()
         except httpx.RequestError as e:
@@ -261,7 +359,8 @@ class BetfairClient:
         method: str, 
         params: Dict[str, Any], 
         session_token: str,
-        rate_limit_key: Optional[str] = None
+        rate_limit_key: Optional[str] = None,
+        endpoint_url: str = None
     ) -> Dict[str, Any]:
         """
         Make JSON-RPC request to Betfair API.
@@ -281,9 +380,11 @@ class BetfairClient:
             "id": 1
         }
         
+        url = endpoint_url or config.BETFAIR_API_URL
+        
         try:
             response = await self.client.post(
-                config.BETFAIR_API_URL,
+                url,
                 json=payload,
                 headers=self._get_headers(session_token)
             )
@@ -292,6 +393,15 @@ class BetfairClient:
             
             if "error" in result:
                 error = result["error"]
+                error_data = error.get("data", {})
+                
+                # Check for session expiry
+                if error_data.get("exceptionname") == "INVALID_SESSION_INFORMATION":
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Session expired"
+                    )
+                
                 logger.error(f"API error: {error}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -306,6 +416,54 @@ class BetfairClient:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(e)
             )
+
+    async def _account_request(
+        self, 
+        method: str, 
+        params: Dict[str, Any], 
+        session_token: str
+    ) -> Dict[str, Any]:
+        """Make JSON-RPC request to Betfair Account API."""
+        payload = {
+            "jsonrpc": "2.0",
+            "method": f"AccountAPING/v1.0/{method}",
+            "params": params,
+            "id": 1
+        }
+        
+        try:
+            response = await self.client.post(
+                config.BETFAIR_ACCOUNT_URL,
+                json=payload,
+                headers=self._get_headers(session_token)
+            )
+            
+            result = response.json()
+            
+            if "error" in result:
+                error = result["error"]
+                logger.error(f"Account API error: {error}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=error.get("message", str(error))
+                )
+            
+            return result.get("result", {})
+            
+        except httpx.RequestError as e:
+            logger.error(f"Account API request error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e)
+            )
+    
+    async def get_account_funds(self, session_token: str) -> Dict[str, Any]:
+        """Get account balance and funds."""
+        return await self._account_request(
+            "getAccountFunds",
+            {},
+            session_token
+        )
     
     async def list_market_catalogue(
         self, 
@@ -455,7 +613,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CHIMERA Lay Betting API",
     description="Betfair Exchange integration for horse racing lay betting",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan
 )
 
@@ -501,11 +659,22 @@ async def health_check():
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
+@app.get("/api/config")
+async def get_config():
+    """Debug endpoint to check configuration."""
+    return {
+        "login_url": config.BETFAIR_LOGIN_URL,
+        "api_url": config.BETFAIR_API_URL,
+        "account_url": config.BETFAIR_ACCOUNT_URL,
+        "app_key_prefix": config.BETFAIR_APP_KEY[:8] + "...",
+        "session_timeout_hours": config.SESSION_TIMEOUT_HOURS
+    }
+
 @app.post("/api/auth/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """
     Authenticate with Betfair Exchange.
-    Returns session token valid for 4 hours.
+    Returns session token valid for 12 hours.
     """
     result = await betfair_client.login(request.username, request.password)
     return LoginResponse(**result)
@@ -514,7 +683,7 @@ async def login(request: LoginRequest):
 async def keep_alive(session_token: str = Depends(get_session_token)):
     """
     Extend session lifetime.
-    Must be called within 4 hours of last auth.
+    Must be called within 12 hours of last auth.
     """
     return await betfair_client.keep_alive(session_token)
 
@@ -561,8 +730,8 @@ async def place_order(
 
 @app.post("/api/orders/cancel")
 async def cancel_order(
-    market_id: str,
-    bet_id: Optional[str] = None,
+    market_id: str = Query(...),
+    bet_id: Optional[str] = Query(None),
     session_token: str = Depends(get_session_token)
 ):
     """Cancel unmatched orders."""
@@ -579,6 +748,16 @@ async def get_current_orders(
     """
     ids = market_ids.split(",") if market_ids else None
     return await betfair_client.list_current_orders(session_token, ids)
+
+@app.get("/api/account/balance")
+async def get_account_balance(
+    session_token: str = Depends(get_session_token)
+):
+    """
+    Get account balance and available funds.
+    Returns: availableToBetBalance, exposure, retainedCommission, pointsBalance, discountRate
+    """
+    return await betfair_client.get_account_funds(session_token)
 
 # =============================================================================
 # Error Handlers
