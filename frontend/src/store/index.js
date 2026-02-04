@@ -1,10 +1,11 @@
 /**
  * CHIMERA State Management
  * Zustand store for application state
- * UPDATED: Added Account and Orders stores
+ * UPDATED: Added Rules store for rule-based betting
  */
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { authAPI, marketsAPI, ordersAPI, accountAPI, isSessionValid, clearSession } from '../services/api';
 
 /**
@@ -250,7 +251,7 @@ export const useBetSlipStore = create((set, get) => ({
 }));
 
 /**
- * Orders Store - NEW
+ * Orders Store
  */
 export const useOrdersStore = create((set, get) => ({
   orders: [],
@@ -296,7 +297,7 @@ export const useOrdersStore = create((set, get) => ({
 }));
 
 /**
- * Account Store - NEW
+ * Account Store
  */
 export const useAccountStore = create((set) => ({
   balance: null,
@@ -323,6 +324,102 @@ export const useAccountStore = create((set) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+/**
+ * Rules Store - For rule-based automatic betting
+ * Persisted to localStorage so settings survive page refresh
+ */
+export const useRulesStore = create(
+  persist(
+    (set, get) => ({
+      // Master toggle for rule-based betting
+      isEnabled: false,
+      
+      // List of active rule IDs
+      activeRules: [],
+      
+      // Betting settings
+      settings: {
+        maxRaces: 10,           // Max number of races to bet on
+        minStake: 1.00,         // Minimum stake per bet (£)
+        maxStake: 10.00,        // Maximum stake per bet (£)
+        totalLimit: 100.00,     // Total session budget (£)
+        stopLoss: 50.00,        // Stop if losses exceed this
+        onlyPreRace: true,      // Only bet within 5 mins of start
+      },
+      
+      // Session tracking
+      session: {
+        betsPlaced: 0,
+        totalStaked: 0,
+        racesProcessed: 0,
+        profitLoss: 0,
+      },
+
+      // Toggle master enable/disable
+      toggleEnabled: () => set((state) => ({ 
+        isEnabled: !state.isEnabled,
+        // Reset session when enabling
+        session: state.isEnabled ? state.session : {
+          betsPlaced: 0,
+          totalStaked: 0,
+          racesProcessed: 0,
+          profitLoss: 0,
+        }
+      })),
+
+      // Toggle individual rule
+      toggleRule: (ruleId) => set((state) => ({
+        activeRules: state.activeRules.includes(ruleId)
+          ? state.activeRules.filter(id => id !== ruleId)
+          : [...state.activeRules, ruleId]
+      })),
+
+      // Update settings
+      updateSettings: (newSettings) => set((state) => ({
+        settings: { ...state.settings, ...newSettings }
+      })),
+
+      // Update session stats
+      updateSession: (updates) => set((state) => ({
+        session: { ...state.session, ...updates }
+      })),
+
+      // Check if betting should continue
+      canContinueBetting: () => {
+        const { isEnabled, settings, session } = get();
+        
+        if (!isEnabled) return false;
+        if (session.racesProcessed >= settings.maxRaces) return false;
+        if (session.totalStaked >= settings.totalLimit) return false;
+        if (session.profitLoss <= -settings.stopLoss) return false;
+        
+        return true;
+      },
+
+      // Reset session
+      resetSession: () => set({
+        session: {
+          betsPlaced: 0,
+          totalStaked: 0,
+          racesProcessed: 0,
+          profitLoss: 0,
+        }
+      }),
+
+      // Clear all rules
+      clearRules: () => set({ activeRules: [] }),
+    }),
+    {
+      name: 'chimera-rules-storage',
+      partialize: (state) => ({
+        activeRules: state.activeRules,
+        settings: state.settings,
+        // Don't persist isEnabled - always start off
+      }),
+    }
+  )
+);
 
 /**
  * Toast Notifications Store

@@ -1,218 +1,159 @@
 /**
- * CHIMERA Market List
- * Displays available horse racing markets
+ * Market List Component
+ * Shows available racing markets grouped by venue
+ * UPDATED: Removed header (now in Dashboard)
  */
 
 import { useMemo } from 'react';
 import { useMarketsStore } from '../store';
-import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 
 function MarketList({ markets, isLoading }) {
   const { selectedMarket, selectMarket } = useMarketsStore();
 
-  // Group markets by venue
+  // Group markets by venue/competition
   const groupedMarkets = useMemo(() => {
-    if (!markets?.length) return {};
+    const groups = {};
     
-    return markets.reduce((acc, market) => {
-      const venue = market.event?.venue || market.competition?.name || 'Unknown';
-      if (!acc[venue]) {
-        acc[venue] = [];
+    markets.forEach(market => {
+      const venue = market.competition?.name || market.event?.venue || 'Other';
+      if (!groups[venue]) {
+        groups[venue] = [];
       }
-      acc[venue].push(market);
-      return acc;
-    }, {});
+      groups[venue].push(market);
+    });
+
+    // Sort each group by start time
+    Object.values(groups).forEach(group => {
+      group.sort((a, b) => new Date(a.marketStartTime) - new Date(b.marketStartTime));
+    });
+
+    return groups;
   }, [markets]);
 
-  // Sort venues alphabetically
-  const sortedVenues = useMemo(() => {
-    return Object.keys(groupedMarkets).sort();
-  }, [groupedMarkets]);
-
-  if (isLoading && !markets?.length) {
-    return <LoadingSkeleton />;
+  if (isLoading && markets.length === 0) {
+    return (
+      <div className="p-4">
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="animate-pulse">
+              <div className="h-4 bg-chimera-border rounded w-24 mb-2" />
+              <div className="h-16 bg-chimera-surface rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
-  if (!markets?.length) {
+  if (markets.length === 0) {
     return (
-      <div className="p-6 text-center">
-        <p className="text-chimera-muted text-sm">
-          No races available
-        </p>
+      <div className="p-4 text-center">
+        <p className="text-sm text-chimera-muted">No markets available</p>
       </div>
     );
   }
 
   return (
-    <div className="py-4">
-      <div className="px-4 mb-4">
-        <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-          <CalendarIcon className="w-4 h-4 text-chimera-accent" />
-          Today's Racing
-        </h2>
-        <p className="text-xs text-chimera-muted mt-1">
-          {markets.length} WIN markets available
-        </p>
-      </div>
+    <div className="pb-4">
+      {Object.entries(groupedMarkets).map(([venue, venueMarkets]) => (
+        <div key={venue} className="mb-2">
+          {/* Venue Header */}
+          <div className="px-4 py-2 sticky top-0 bg-chimera-bg/95 backdrop-blur-sm z-10">
+            <h3 className="text-xs font-semibold text-chimera-accent uppercase tracking-wider">
+              {venue}
+            </h3>
+          </div>
 
-      <div className="space-y-4">
-        {sortedVenues.map((venue) => (
-          <VenueGroup
-            key={venue}
-            venue={venue}
-            markets={groupedMarkets[venue]}
-            selectedMarketId={selectedMarket?.marketId}
-            onSelectMarket={selectMarket}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function VenueGroup({ venue, markets, selectedMarketId, onSelectMarket }) {
-  // Sort by start time
-  const sortedMarkets = useMemo(() => {
-    return [...markets].sort((a, b) => {
-      const timeA = new Date(a.marketStartTime || 0);
-      const timeB = new Date(b.marketStartTime || 0);
-      return timeA - timeB;
-    });
-  }, [markets]);
-
-  return (
-    <div>
-      <div className="px-4 py-2 bg-chimera-surface">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-chimera-accent">
-          {venue}
-        </h3>
-      </div>
-      
-      <div>
-        {sortedMarkets.map((market) => (
-          <MarketItem
-            key={market.marketId}
-            market={market}
-            isSelected={market.marketId === selectedMarketId}
-            onClick={() => onSelectMarket(market)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MarketItem({ market, isSelected, onClick }) {
-  const startTime = market.marketStartTime ? parseISO(market.marketStartTime) : null;
-  
-  const timeDisplay = useMemo(() => {
-    if (!startTime) return 'TBD';
-    return format(startTime, 'HH:mm');
-  }, [startTime]);
-
-  const dateLabel = useMemo(() => {
-    if (!startTime) return '';
-    if (isToday(startTime)) return 'Today';
-    if (isTomorrow(startTime)) return 'Tomorrow';
-    return format(startTime, 'dd MMM');
-  }, [startTime]);
-
-  // Calculate time until race
-  const timeUntil = useMemo(() => {
-    if (!startTime) return null;
-    const now = new Date();
-    const diff = startTime - now;
-    
-    if (diff < 0) return 'Started';
-    
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 60) return `${minutes}m`;
-    
-    const hours = Math.floor(minutes / 60);
-    const remainingMins = minutes % 60;
-    return `${hours}h ${remainingMins}m`;
-  }, [startTime]);
-
-  const runnersCount = market.runners?.length || 0;
-
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        w-full px-4 py-3 text-left transition-all duration-150
-        hover:bg-chimera-surface-hover border-l-2
-        ${isSelected 
-          ? 'bg-chimera-surface border-l-chimera-accent' 
-          : 'border-l-transparent'
-        }
-      `}
-    >
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-lg font-semibold text-white">
-          {timeDisplay}
-        </span>
-        
-        {timeUntil && (
-          <span className={`
-            text-xs font-medium px-2 py-0.5 rounded
-            ${timeUntil === 'Started' 
-              ? 'bg-red-500/20 text-red-400' 
-              : 'bg-chimera-accent/20 text-chimera-accent'
-            }
-          `}>
-            {timeUntil}
-          </span>
-        )}
-      </div>
-      
-      <p className="text-sm text-chimera-muted mt-1 truncate">
-        {market.marketName || `Race at ${timeDisplay}`}
-      </p>
-      
-      <div className="flex items-center gap-3 mt-2 text-xs text-chimera-muted">
-        <span className="flex items-center gap-1">
-          <HorseIcon className="w-3 h-3" />
-          {runnersCount} runners
-        </span>
-        <span>{dateLabel}</span>
-      </div>
-    </button>
-  );
-}
-
-function LoadingSkeleton() {
-  return (
-    <div className="p-4 space-y-4">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="space-y-2">
-          <div className="skeleton h-4 w-24" />
-          <div className="skeleton h-16 w-full" />
-          <div className="skeleton h-16 w-full" />
+          {/* Markets */}
+          <div className="space-y-1 px-2">
+            {venueMarkets.map(market => (
+              <MarketCard
+                key={market.marketId}
+                market={market}
+                isSelected={selectedMarket?.marketId === market.marketId}
+                onSelect={() => selectMarket(market)}
+              />
+            ))}
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-// Icons
-function CalendarIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-      />
-    </svg>
-  );
-}
+function MarketCard({ market, isSelected, onSelect }) {
+  const startTime = new Date(market.marketStartTime);
+  const now = new Date();
+  const minutesToStart = Math.round((startTime - now) / 60000);
+  
+  // Format time
+  const timeStr = startTime.toLocaleTimeString('en-GB', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
 
-function HorseIcon({ className }) {
+  // Time until start badge
+  const getTimeBadge = () => {
+    if (minutesToStart < 0) {
+      return { text: 'Started', color: 'bg-red-500/20 text-red-400' };
+    } else if (minutesToStart <= 5) {
+      return { text: `${minutesToStart}m`, color: 'bg-red-500/20 text-red-400' };
+    } else if (minutesToStart <= 30) {
+      return { text: `${minutesToStart}m`, color: 'bg-yellow-500/20 text-yellow-400' };
+    } else if (minutesToStart <= 60) {
+      return { text: `${minutesToStart}m`, color: 'bg-chimera-green/20 text-chimera-green' };
+    } else {
+      const hours = Math.floor(minutesToStart / 60);
+      const mins = minutesToStart % 60;
+      return { 
+        text: `${hours}h ${mins}m`, 
+        color: 'bg-chimera-accent/20 text-chimera-accent' 
+      };
+    }
+  };
+
+  const timeBadge = getTimeBadge();
+
+  // Race name formatting
+  const raceName = market.event?.name || market.marketName || 'Unknown Race';
+  const raceType = market.description?.raceType || '';
+  const runnerCount = market.runners?.length || 0;
+
   return (
-    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
-      <path d="M10 2L3 9h4v9h6V9h4L10 2z" />
-    </svg>
+    <button
+      onClick={onSelect}
+      className={`w-full text-left p-3 rounded-lg transition-all ${
+        isSelected 
+          ? 'bg-chimera-accent/20 border border-chimera-accent/50' 
+          : 'bg-chimera-surface hover:bg-chimera-border/50 border border-transparent'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-white">
+              {timeStr}
+            </span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${timeBadge.color}`}>
+              {timeBadge.text}
+            </span>
+          </div>
+          <p className="text-xs text-chimera-muted mt-1 truncate">
+            {raceName}
+          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs text-chimera-muted">
+              🐎 {runnerCount} runners
+            </span>
+            {raceType && (
+              <span className="text-xs text-chimera-muted">
+                • {raceType}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </button>
   );
 }
 

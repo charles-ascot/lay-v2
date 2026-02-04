@@ -1,7 +1,7 @@
 /**
  * CHIMERA Dashboard
  * Main trading interface
- * UPDATED: Added Account Balance and Open Orders panels
+ * UPDATED: Fixed scrolling - sidebars are static with independent scroll
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -11,6 +11,7 @@ import MarketView from './MarketView';
 import BetSlip from './BetSlip';
 import AccountBalance from './AccountBalance';
 import OpenOrders from './OpenOrders';
+import RuleBasedBetting from './RuleBasedBetting';
 
 // Refresh interval for prices (10 seconds for delayed data)
 const PRICE_REFRESH_INTERVAL = 10000;
@@ -28,7 +29,6 @@ function Dashboard({ onLogout }) {
   const { selection } = useBetSlipStore();
   const { addToast } = useToastStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showRightPanel, setShowRightPanel] = useState(true);
 
   // Fetch market catalogue on mount
   useEffect(() => {
@@ -73,9 +73,9 @@ function Dashboard({ onLogout }) {
   }, [fetchCatalogue, fetchMarketBook, selectedMarket, addToast]);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="glass-card border-0 border-b rounded-none px-6 py-4">
+    <div className="h-screen flex flex-col overflow-hidden">
+      {/* Header - Fixed at top */}
+      <header className="flex-shrink-0 glass-card border-0 border-b rounded-none px-6 py-4 z-20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold">
@@ -120,48 +120,61 @@ function Dashboard({ onLogout }) {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Content Area - Below Header */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Market List Sidebar */}
-        <aside className="w-80 border-r border-chimera-border overflow-y-auto">
-          <MarketList 
-            markets={catalogue} 
-            isLoading={isLoading}
-          />
+        
+        {/* LEFT SIDEBAR - Fixed with independent scroll */}
+        <aside className="w-80 flex-shrink-0 border-r border-chimera-border flex flex-col bg-chimera-bg">
+          {/* Sidebar Header - Fixed */}
+          <div className="flex-shrink-0 p-4 border-b border-chimera-border">
+            <div className="flex items-center gap-2 text-white">
+              <CalendarIcon className="w-4 h-4 text-chimera-accent" />
+              <span className="font-semibold text-sm">Today's Racing</span>
+            </div>
+            <p className="text-xs text-chimera-muted mt-1">
+              {catalogue.length} WIN markets available
+            </p>
+          </div>
+          
+          {/* Market List - Scrollable independently */}
+          <div className="flex-1 overflow-y-auto">
+            <MarketList 
+              markets={catalogue} 
+              isLoading={isLoading}
+            />
+          </div>
         </aside>
 
-        {/* Market View */}
-        <main className="flex-1 overflow-y-auto p-6">
-          {selectedMarket ? (
-            <MarketView isRefreshing={isRefreshing} />
-          ) : (
-            <EmptyState />
-          )}
+        {/* CENTER - Market View with independent scroll */}
+        <main className="flex-1 overflow-y-auto bg-chimera-bg/50">
+          <div className="p-6">
+            {selectedMarket ? (
+              <MarketView isRefreshing={isRefreshing} />
+            ) : (
+              <EmptyState />
+            )}
+          </div>
         </main>
 
-        {/* Right Panel - Account, Orders, BetSlip */}
-        <aside className="w-96 border-l border-chimera-border overflow-y-auto flex flex-col">
-          {/* Toggle Button */}
-          <button
-            onClick={() => setShowRightPanel(!showRightPanel)}
-            className="md:hidden absolute right-0 top-1/2 transform -translate-y-1/2 bg-chimera-surface p-2 rounded-l-lg"
-          >
-            {showRightPanel ? '→' : '←'}
-          </button>
-
-          <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showRightPanel ? '' : 'hidden md:block'}`}>
-            {/* Account Balance */}
+        {/* RIGHT SIDEBAR - Fixed with independent scroll */}
+        <aside className="w-96 flex-shrink-0 border-l border-chimera-border flex flex-col bg-chimera-bg">
+          {/* Right sidebar content - Scrollable independently */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Account Balance - Always visible */}
             <AccountBalance />
 
             {/* Open Orders */}
             <OpenOrders />
 
-            {/* Bet Slip - shows when selection is made */}
+            {/* Bet Slip - Shows when selection is made */}
             {selection && (
               <div className="animate-slideUp">
                 <BetSlip />
               </div>
             )}
+
+            {/* Rule Based Betting */}
+            <RuleBasedBetting />
           </div>
         </aside>
       </div>
@@ -171,7 +184,7 @@ function Dashboard({ onLogout }) {
 
 function EmptyState() {
   return (
-    <div className="h-full flex items-center justify-center">
+    <div className="h-full min-h-[400px] flex items-center justify-center">
       <div className="text-center">
         <HorseIcon className="w-16 h-16 text-chimera-muted mx-auto mb-4 opacity-50" />
         <h3 className="text-lg font-medium text-white mb-2">
@@ -207,6 +220,19 @@ function LogoutIcon({ className }) {
         strokeLinejoin="round"
         strokeWidth={2}
         d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+      />
+    </svg>
+  );
+}
+
+function CalendarIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
       />
     </svg>
   );
