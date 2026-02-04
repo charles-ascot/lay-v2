@@ -9,7 +9,7 @@ on:
 
 env:
   PROJECT_ID: chimera-v4
-  REGION: europe-west1
+  REGION: europe-west2
   SERVICE_NAME: chimera-lay-backend
   REPOSITORY: chimera
 
