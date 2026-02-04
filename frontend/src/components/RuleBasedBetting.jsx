@@ -27,54 +27,38 @@ const BETTING_RULES = [
     notes: 'Max liability £8/bet, £50/day. Stop loss -£20. Persistence: CANCEL at in-play.',
     
     evaluate: (runners, settings, market) => {
-      // Calculate time to race
       const raceStart = new Date(market.marketStartTime);
       const now = new Date();
       const timeToRaceMinutes = (raceStart - now) / 60000;
       
-      // Find runners in optimal odds range (3.00 - 4.49)
       const candidates = runners
         .filter(r => {
           const layPrice = r.prices?.availableToLay?.[0]?.price;
           const laySize = r.prices?.availableToLay?.[0]?.size || 0;
-          
           if (!layPrice) return false;
-          
-          // CORE FILTER: Only odds 3.00 to 4.49
           if (layPrice < 3.00 || layPrice >= 4.50) return false;
-          
-          // Liquidity check (need enough to place bet)
           if (laySize < 5) return false;
-          
           return true;
         })
         .map(r => {
           const odds = r.prices.availableToLay[0].price;
-          
-          // Determine stake and confidence per Tumorra rules
           let stake = 1;
           let confidence = 'LOW';
           let expectedWinRate = 0.60;
           let zone = 'SECONDARY';
           
-          // SWEET SPOT: 3.50 - 4.49 (highest edge: +13.8%)
           if (odds >= 3.50 && odds < 4.50) {
             zone = 'SWEET';
             stake = Math.min(2, settings.maxStake);
-            
             if (timeToRaceMinutes <= 120) {
-              // Within 2 hours - highest confidence
               confidence = 'HIGH';
               expectedWinRate = 0.88;
             } else {
               confidence = 'MEDIUM';
               expectedWinRate = 0.85;
             }
-          }
-          // SECONDARY ZONE: 3.00 - 3.49 (moderate edge: +5.4%)
-          else if (odds >= 3.00 && odds < 3.50) {
+          } else if (odds >= 3.00 && odds < 3.50) {
             zone = 'SECONDARY';
-            
             if (timeToRaceMinutes <= 120) {
               stake = Math.min(2, settings.maxStake);
               confidence = 'MEDIUM';
@@ -86,12 +70,8 @@ const BETTING_RULES = [
             }
           }
           
-          // Calculate liability
           const liability = stake * (odds - 1);
-          
-          // Reject if liability exceeds £8 per bet (Tumorra rule)
           if (liability > 8) {
-            // Try reducing stake to fit liability cap
             const maxStakeForLiability = Math.floor(8 / (odds - 1));
             if (maxStakeForLiability >= 1) {
               return {
@@ -107,39 +87,21 @@ const BETTING_RULES = [
             return null;
           }
           
-          return {
-            runner: r,
-            stake,
-            odds,
-            liability,
-            confidence,
-            expectedWinRate,
-            zone
-          };
+          return { runner: r, stake, odds, liability, confidence, expectedWinRate, zone };
         })
         .filter(x => x !== null)
-        // Sort: HIGH confidence first, then SWEET zone, then by optimal odds (3.5-4.0)
         .sort((a, b) => {
           const confOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
           if (confOrder[a.confidence] !== confOrder[b.confidence]) {
             return confOrder[a.confidence] - confOrder[b.confidence];
           }
-          // Prefer sweet spot
           if (a.zone === 'SWEET' && b.zone !== 'SWEET') return -1;
           if (a.zone !== 'SWEET' && b.zone === 'SWEET') return 1;
-          // Within sweet spot, prefer 3.5-4.0 (best edge per data)
-          const aOptimal = a.odds >= 3.50 && a.odds < 4.00;
-          const bOptimal = b.odds >= 3.50 && b.odds < 4.00;
-          if (aOptimal && !bOptimal) return -1;
-          if (!aOptimal && bOptimal) return 1;
           return 0;
         });
 
-      if (candidates.length === 0) {
-        return null;
-      }
+      if (candidates.length === 0) return null;
 
-      // Take only best candidate (max 1 bet per race per Tumorra rules)
       const best = candidates[0];
       const timeLabel = timeToRaceMinutes <= 120 ? '<2hrs' : '>2hrs';
       
@@ -150,14 +112,12 @@ const BETTING_RULES = [
           stake: best.stake,
           reason: `${best.zone} zone, ${best.confidence} conf`
         }],
-        analysis: `${best.runner.runnerName} @ ${best.odds.toFixed(2)} [${best.zone}] ${best.confidence} (${timeLabel}), £${best.liability.toFixed(2)} liability`
+        analysis: `${best.runner.runnerName} @ ${best.odds.toFixed(2)} [${best.zone}] ${best.confidence} (${timeLabel})`
       };
     }
   },
 
-  // ============================================
-  // ORIGINAL RULES (kept for flexibility)
-  // ============================================
+  // Original rules
   {
     id: 'R-001',
     name: 'Dual Favourite Coverage',
@@ -184,7 +144,7 @@ const BETTING_RULES = [
             { runner: sorted[0], stake: settings.minStake },
             { runner: sorted[1], stake: settings.minStake }
           ],
-          analysis: `Fav ${favOdds.toFixed(2)}, Gap ${gap.toFixed(2)} < 2.0 → Dual coverage`
+          analysis: `Fav ${favOdds.toFixed(2)}, Gap ${gap.toFixed(2)} → Dual coverage`
         };
       }
       return null;
@@ -213,7 +173,7 @@ const BETTING_RULES = [
         return {
           matched: true,
           selections: [{ runner: sorted[0], stake: settings.minStake }],
-          analysis: `Fav ${favOdds.toFixed(2)}, Gap ${gap.toFixed(2)} >= 2.0 → Strong fav`
+          analysis: `Fav ${favOdds.toFixed(2)}, Gap ${gap.toFixed(2)} → Strong fav`
         };
       }
       return null;
@@ -241,7 +201,7 @@ const BETTING_RULES = [
         return {
           matched: true,
           skip: true,
-          analysis: `Grade 1 with odds-on fav (${sorted[0].prices.availableToLay[0].price.toFixed(2)}) → SKIP`
+          analysis: `Grade 1 odds-on (${sorted[0].prices.availableToLay[0].price.toFixed(2)}) → SKIP`
         };
       }
       return null;
@@ -256,19 +216,14 @@ const BETTING_RULES = [
     action: 'Skip bet',
     notes: 'Prevents slippage',
     evaluate: (runners, settings) => {
-      const MULTIPLIER = 3;
-      const minRequired = settings.minStake * MULTIPLIER;
-      
-      const hasLiquidity = runners.some(r => {
-        const available = r.prices?.availableToLay?.[0]?.size || 0;
-        return available >= minRequired;
-      });
+      const minRequired = settings.minStake * 3;
+      const hasLiquidity = runners.some(r => (r.prices?.availableToLay?.[0]?.size || 0) >= minRequired);
       
       if (!hasLiquidity) {
         return {
           matched: true,
           skip: true,
-          analysis: `Insufficient liquidity (need £${minRequired.toFixed(2)}) → SKIP`
+          analysis: `Low liquidity (need £${minRequired.toFixed(2)}) → SKIP`
         };
       }
       return null;
@@ -291,9 +246,17 @@ function RuleBasedBetting() {
   const [expandedRule, setExpandedRule] = useState(null);
   const [activity, setActivity] = useState([]);
   const intervalRef = useRef(null);
-  
-  // Tumorra risk management tracking
   const [dailyLiability, setDailyLiability] = useState(0);
+
+  // Helper to format race time
+  const formatRaceTime = (market) => {
+    const raceTime = new Date(market.marketStartTime).toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const venue = market.event?.venue || '';
+    return { raceTime, venue, display: venue ? `${venue} ${raceTime}` : raceTime };
+  };
 
   // Main betting loop
   const runBettingCycle = useCallback(async () => {
@@ -301,7 +264,6 @@ function RuleBasedBetting() {
     
     if (!isRunning || activeRules.length === 0) return;
     
-    // Check session limits
     if (session.racesProcessed >= settings.maxRaces) {
       addToast('Max races reached - stopping', 'info');
       stopAutoBetting();
@@ -312,29 +274,24 @@ function RuleBasedBetting() {
       stopAutoBetting();
       return;
     }
-    
-    // Tumorra daily liability check (£50 max)
     if (dailyLiability >= 50) {
       addToast('Daily liability limit (£50) reached - stopping', 'warning');
       stopAutoBetting();
       return;
     }
 
-    // Find eligible markets
     const now = new Date();
     const eligibleMarkets = catalogue.filter(m => {
       const start = new Date(m.marketStartTime);
       const minsToStart = (start - now) / 60000;
-      
       if (settings.onlyPreRace && (minsToStart > 5 || minsToStart < 0)) return false;
       if (session.processedMarkets?.includes(m.marketId)) return false;
-      
       return true;
     });
 
     if (eligibleMarkets.length === 0) {
       setActivity(prev => [...prev.slice(-9), {
-        time: new Date().toLocaleTimeString(),
+        time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
         text: 'No eligible markets',
         type: 'info'
       }]);
@@ -342,6 +299,7 @@ function RuleBasedBetting() {
     }
 
     const market = eligibleMarkets[0];
+    const { raceTime, venue, display: venueDisplay } = formatRaceTime(market);
     
     try {
       const books = await marketsAPI.getBook([market.marketId]);
@@ -359,7 +317,6 @@ function RuleBasedBetting() {
         return { ...r, prices: bookRunner?.ex };
       });
 
-      // Evaluate rules
       for (const ruleId of activeRules) {
         const rule = BETTING_RULES.find(r => r.id === ruleId);
         if (!rule?.evaluate) continue;
@@ -369,8 +326,8 @@ function RuleBasedBetting() {
         if (result?.matched) {
           if (result.skip) {
             setActivity(prev => [...prev.slice(-9), {
-              time: new Date().toLocaleTimeString(),
-              text: `${market.event?.name}: ${result.analysis}`,
+              time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+              text: `${venue} ${raceTime}: ${result.analysis}`,
               type: 'skip'
             }]);
             break;
@@ -392,11 +349,10 @@ function RuleBasedBetting() {
             const odds = selection.runner.prices.availableToLay[0].price;
             const liability = stake * (odds - 1);
             
-            // Check daily liability cap
             if (dailyLiability + liability > 50) {
               setActivity(prev => [...prev.slice(-9), {
-                time: new Date().toLocaleTimeString(),
-                text: `Would exceed £50 daily liability - skipped`,
+                time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                text: `${venue} ${raceTime}: Would exceed £50 liability - skipped`,
                 type: 'skip'
               }]);
               continue;
@@ -410,10 +366,14 @@ function RuleBasedBetting() {
                 stake
               );
 
+              // Add bet with venue and race time
               addBet({
                 betId: betResult?.instructionReports?.[0]?.betId,
                 marketId: market.marketId,
                 marketName: market.event?.name || market.marketName,
+                venue: market.event?.venue,
+                countryCode: market.event?.countryCode,
+                raceTime: market.marketStartTime,
                 selectionId: selection.runner.selectionId,
                 runnerName: selection.runner.runnerName,
                 side: 'LAY',
@@ -429,18 +389,19 @@ function RuleBasedBetting() {
               
               setDailyLiability(prev => prev + liability);
 
+              // Activity log with venue and race time (format: "Kempton 14:35: Horse @ odds")
               setActivity(prev => [...prev.slice(-9), {
-                time: new Date().toLocaleTimeString(),
-                text: `✓ LAY ${selection.runner.runnerName} @ ${odds.toFixed(2)} £${stake}`,
+                time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                text: `✓ ${venue} ${raceTime}: ${selection.runner.runnerName} @ ${odds.toFixed(2)} £${stake}`,
                 type: 'bet'
               }]);
 
-              addToast(`Bet placed: ${selection.runner.runnerName}`, 'success');
+              addToast(`${venue} ${raceTime}: ${selection.runner.runnerName} @ ${odds.toFixed(2)}`, 'success');
               
             } catch (err) {
               setActivity(prev => [...prev.slice(-9), {
-                time: new Date().toLocaleTimeString(),
-                text: `✗ ${err.message}`,
+                time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                text: `✗ ${venue} ${raceTime}: ${err.message}`,
                 type: 'error'
               }]);
             }
@@ -456,7 +417,7 @@ function RuleBasedBetting() {
 
     } catch (err) {
       setActivity(prev => [...prev.slice(-9), {
-        time: new Date().toLocaleTimeString(),
+        time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
         text: `Error: ${err.message}`,
         type: 'error'
       }]);
@@ -491,7 +452,6 @@ function RuleBasedBetting() {
     addToast('Auto-betting stopped', 'info');
   };
 
-  // Group rules for display
   const mainStrategy = BETTING_RULES.filter(r => r.type === 'Complete Strategy');
   const otherRules = BETTING_RULES.filter(r => r.type !== 'Complete Strategy');
 
@@ -569,8 +529,8 @@ function RuleBasedBetting() {
                     a.type === 'error' ? 'text-red-400' :
                     'text-chimera-muted'
                   }`}>
-                    <span className="opacity-60">{a.time}</span>
-                    <span>{a.text}</span>
+                    <span className="opacity-60 flex-shrink-0">{a.time}</span>
+                    <span className="break-words">{a.text}</span>
                   </div>
                 ))}
               </div>
@@ -670,7 +630,7 @@ function RuleBasedBetting() {
 
           {/* Rules */}
           <div className="mt-4 pt-4 border-t border-chimera-border space-y-4">
-            {/* Mark's Strategy - Featured */}
+            {/* Mark's Strategy */}
             <div>
               <div className="text-xs uppercase tracking-wider mb-2 flex items-center gap-2">
                 <span className="text-chimera-gold">⭐</span>

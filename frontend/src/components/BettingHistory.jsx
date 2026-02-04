@@ -1,6 +1,6 @@
 /**
  * Betting History Component
- * Shows all placed bets, P/L tracking, daily statements, CSV export
+ * Shows all placed bets with venue, race time, P/L tracking, statements, CSV export
  */
 
 import { useState, useMemo } from 'react';
@@ -89,6 +89,9 @@ function BettingHistory() {
       {/* Date Picker for Statement */}
       {view === 'statement' && (
         <div className="mb-4">
+          <div className="text-xs text-chimera-muted uppercase tracking-wider mb-2">
+            STATEMENT: {selectedDate}
+          </div>
           <input
             type="date"
             value={selectedDate}
@@ -145,10 +148,6 @@ function BettingHistory() {
 
       {/* Bets List */}
       <div className="mb-4">
-        <div className="text-xs text-chimera-muted uppercase tracking-wider mb-2">
-          {view === 'statement' ? `Statement: ${selectedDate}` : `${stats.count} Bets`}
-        </div>
-        
         {filteredBets.length === 0 ? (
           <div className="text-center py-8 text-chimera-muted text-sm">
             No bets found
@@ -216,24 +215,53 @@ function BetCard({ bet }) {
     pending: 'border-yellow-500/30 bg-yellow-500/5',
   };
 
-  const time = new Date(bet.placedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  const date = new Date(bet.placedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  // Format placed time
+  const placedTime = new Date(bet.placedAt).toLocaleTimeString('en-GB', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+  const placedDate = new Date(bet.placedAt).toLocaleDateString('en-GB', { 
+    day: '2-digit', 
+    month: 'short' 
+  });
+
+  // Format race time if available - this is the actual race start time
+  const raceTime = bet.raceTime 
+    ? new Date(bet.raceTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  // Venue display with country code
+  const venueDisplay = bet.venue 
+    ? `${bet.venue}${bet.countryCode ? ` (${bet.countryCode})` : ''}`
+    : bet.marketName;
 
   return (
     <div className={`p-2 rounded-lg border ${colors[bet.result] || colors.pending}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
+          {/* Side badge + placed time */}
           <div className="flex items-center gap-2 text-xs">
-            <span className={`px-1.5 py-0.5 rounded ${
+            <span className={`px-1.5 py-0.5 rounded font-medium ${
               bet.side === 'LAY' ? 'bg-chimera-pink/30 text-chimera-pink' : 'bg-chimera-blue/30 text-chimera-blue'
             }`}>
               {bet.side}
             </span>
-            <span className="text-chimera-muted">{date} {time}</span>
+            <span className="text-chimera-muted">{placedDate} {placedTime}</span>
           </div>
-          <p className="text-sm text-white truncate mt-1">{bet.runnerName}</p>
-          <p className="text-xs text-chimera-muted truncate">{bet.marketName}</p>
+          
+          {/* Runner name */}
+          <p className="text-sm text-white font-medium truncate mt-1">{bet.runnerName}</p>
+          
+          {/* Venue + Race Time (prominent display like: "Kempton (GB) 14:35") */}
+          <p className="text-xs truncate">
+            <span className="text-chimera-accent">{venueDisplay}</span>
+            {raceTime && (
+              <span className="text-white font-mono ml-1">{raceTime}</span>
+            )}
+          </p>
         </div>
+        
+        {/* Stake, odds, result */}
         <div className="text-right flex-shrink-0">
           <div className="text-xs text-chimera-muted">£{bet.stake.toFixed(2)} @ {bet.odds}</div>
           {bet.result !== 'pending' ? (
@@ -245,6 +273,8 @@ function BetCard({ bet }) {
           )}
         </div>
       </div>
+      
+      {/* Auto rule indicator */}
       {bet.ruleId && (
         <div className="mt-1 text-xs text-chimera-accent">Auto: {bet.ruleId}</div>
       )}

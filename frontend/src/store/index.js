@@ -284,6 +284,10 @@ export const useHistoryStore = create(
           odds: bet.odds || 0,
           liability: bet.side === 'LAY' ? bet.stake * (bet.odds - 1) : 0,
           placedAt: bet.placedAt || new Date().toISOString(),
+          // Venue and race time for display
+          venue: bet.venue || null,
+          countryCode: bet.countryCode || null,
+          raceTime: bet.raceTime || null,
           result: 'pending', // pending, won, lost, void
           returns: 0,
           profitLoss: 0,
@@ -389,25 +393,31 @@ export const useHistoryStore = create(
           : bets;
         
         const headers = [
-          'Date', 'Time', 'Market', 'Runner', 'Side', 'Stake', 'Odds', 
+          'Date', 'Time', 'Venue', 'Race Time', 'Runner', 'Side', 'Stake', 'Odds', 
           'Liability', 'Result', 'Returns', 'P/L', 'Rule', 'Bet ID'
         ];
         
-        const rows = filtered.map(b => [
-          b.placedAt.split('T')[0],
-          b.placedAt.split('T')[1]?.split('.')[0] || '',
-          `"${b.marketName.replace(/"/g, '""')}"`,
-          `"${b.runnerName.replace(/"/g, '""')}"`,
-          b.side,
-          b.stake.toFixed(2),
-          b.odds.toFixed(2),
-          b.liability.toFixed(2),
-          b.result,
-          b.returns.toFixed(2),
-          b.profitLoss.toFixed(2),
-          b.ruleId || '',
-          b.betId || b.id
-        ]);
+        const rows = filtered.map(b => {
+          const raceTimeStr = b.raceTime 
+            ? new Date(b.raceTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+            : '';
+          return [
+            b.placedAt.split('T')[0],
+            b.placedAt.split('T')[1]?.split('.')[0] || '',
+            `"${(b.venue || b.marketName || '').replace(/"/g, '""')}"`,
+            raceTimeStr,
+            `"${b.runnerName.replace(/"/g, '""')}"`,
+            b.side,
+            b.stake.toFixed(2),
+            b.odds.toFixed(2),
+            b.liability.toFixed(2),
+            b.result,
+            b.returns.toFixed(2),
+            b.profitLoss.toFixed(2),
+            b.ruleId || '',
+            b.betId || b.id
+          ];
+        });
         
         // Add summary row
         const stats = filterDate ? get().getDailyStats(filterDate) : get().getTotalStats();
