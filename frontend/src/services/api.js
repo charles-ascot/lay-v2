@@ -142,7 +142,7 @@ export const ordersAPI = {
   },
 
   async getCurrentOrders(marketIds = null) {
-    const params = marketIds ? `?market_ids=${marketIds.join(',')}` : '';
+    const params = marketIds && Array.isArray(marketIds) ? `?market_ids=${marketIds.join(',')}` : '';
     const response = await api.get(`/api/orders/current${params}`);
     return response.data;
   },
