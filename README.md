@@ -41,7 +41,7 @@ Enterprise-grade Horse Racing Lay Betting application built on Betfair Exchange 
 - **Lay Betting Interface** - Professional trading UI
 - **Rate Limiting** - Betfair compliant (5 req/market/sec)
 - **Session Management** - 4-hour token with keepAlive
-- **Responsive Design** - Dark theme with glass morphism
+- **Responsive Design** - Dark theme with glass morphism.
 
 ## Project Structure
 
