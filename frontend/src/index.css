@@ -59,7 +59,7 @@ body {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.15;
+  opacity: 0.25;
   z-index: -1;
   pointer-events: none;
 }
@@ -82,9 +82,9 @@ body {
    ============================================================================= */
 
 .glass-card {
-  background: rgba(10, 10, 15, 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(10, 10, 15, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--chimera-border);
   border-radius: 12px;
 }
@@ -94,7 +94,7 @@ body {
 }
 
 .glass-card-hover:hover {
-  background: rgba(10, 10, 15, 0.9);
+  background: rgba(10, 10, 15, 0.4);
   border-color: rgba(255, 255, 255, 0.12);
   transform: translateY(-1px);
 }
