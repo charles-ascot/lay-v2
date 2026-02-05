@@ -282,6 +282,10 @@ function RuleBasedBetting() {
 
     const now = new Date();
     const eligibleMarkets = catalogue.filter(m => {
+      // Only GB and IE races
+      const countryCode = m.event?.countryCode || 'GB';
+      if (countryCode !== 'GB' && countryCode !== 'IE') return false;
+
       const start = new Date(m.marketStartTime);
       const minsToStart = (start - now) / 60000;
       if (settings.onlyPreRace && (minsToStart > 5 || minsToStart < 0)) return false;
