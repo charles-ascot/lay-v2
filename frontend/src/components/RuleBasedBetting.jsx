@@ -247,6 +247,7 @@ function RuleBasedBetting() {
   const [activity, setActivity] = useState([]);
   const intervalRef = useRef(null);
   const [dailyLiability, setDailyLiability] = useState(0);
+  const [currentExposure, setCurrentExposure] = useState({ bets: 0, liability: 0, stake: 0 });
 
   // Helper to format race time
   const formatRaceTime = (market) => {
@@ -428,6 +429,32 @@ function RuleBasedBetting() {
     }
   }, [catalogue, addBet, addToast, stopAutoBetting, updateSession, dailyLiability]);
 
+  // Fetch current exposure from open orders
+  useEffect(() => {
+    const fetchExposure = async () => {
+      try {
+        const currentOrders = await ordersAPI.getCurrentOrders();
+        const orders = currentOrders?.currentOrders || [];
+        const totalLiability = orders.reduce((sum, order) => {
+          const liability = order.sizeMatched * (order.priceMatched - 1);
+          return sum + liability;
+        }, 0);
+        const totalStake = orders.reduce((sum, order) => sum + order.sizeMatched, 0);
+        setCurrentExposure({
+          bets: orders.length,
+          liability: totalLiability,
+          stake: totalStake
+        });
+      } catch (err) {
+        console.error('Failed to fetch exposure:', err);
+      }
+    };
+
+    fetchExposure();
+    const exposureInterval = setInterval(fetchExposure, 10000); // Update every 10s
+    return () => clearInterval(exposureInterval);
+  }, []);
+
   useEffect(() => {
     if (isRunning) {
       runBettingCycle();
@@ -566,10 +593,31 @@ function RuleBasedBetting() {
             </div>
           )}
 
+          {/* Current Exposure (Existing Bets) */}
+          {currentExposure.bets > 0 && (
+            <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+              <div className="text-xs font-semibold text-yellow-400 mb-2">EXISTING BETS</div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <div className="text-chimera-muted">Bets</div>
+                  <div className="text-base font-mono text-white">{currentExposure.bets}</div>
+                </div>
+                <div>
+                  <div className="text-chimera-muted">Staked</div>
+                  <div className="text-base font-mono text-white">£{currentExposure.stake.toFixed(2)}</div>
+                </div>
+                <div>
+                  <div className="text-chimera-muted">Exposure</div>
+                  <div className="text-base font-mono text-yellow-400">£{currentExposure.liability.toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Session Stats */}
           <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
             <div className="bg-chimera-surface rounded p-2">
-              <div className="text-chimera-muted">Bets</div>
+              <div className="text-chimera-muted">Auto Bets</div>
               <div className="text-lg font-mono text-white">{session.betsPlaced}</div>
             </div>
             <div className="bg-chimera-surface rounded p-2">
