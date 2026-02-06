@@ -439,16 +439,41 @@ function RuleBasedBetting() {
     return () => intervalRef.current && clearInterval(intervalRef.current);
   }, [isRunning, runBettingCycle]);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (activeRules.length === 0) {
       addToast('Select at least one rule', 'error');
       return;
     }
-    resetSession();
-    setActivity([]);
-    setDailyLiability(0);
-    startAutoBetting();
-    addToast('🚀 Auto-betting STARTED', 'success');
+
+    // Fetch current open orders to avoid duplicate bets
+    try {
+      const currentOrders = await ordersAPI.getCurrentOrders();
+      const existingMarketIds = currentOrders?.currentOrders
+        ?.map(order => order.marketId)
+        .filter(Boolean) || [];
+
+      // Reset session but preserve existing market IDs
+      const today = new Date().toISOString().split('T')[0];
+      updateSession({
+        betsPlaced: 0,
+        totalStaked: 0,
+        racesProcessed: 0,
+        profitLoss: 0,
+        processedMarkets: existingMarketIds, // Start with existing bets
+        lastResetDate: today,
+      });
+
+      setActivity([{
+        time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+        text: `Found ${existingMarketIds.length} existing bet(s) - will skip these markets`,
+        type: 'info'
+      }]);
+      setDailyLiability(0);
+      startAutoBetting();
+      addToast('🚀 Auto-betting STARTED', 'success');
+    } catch (err) {
+      addToast('Failed to fetch current orders: ' + err.message, 'error');
+    }
   };
 
   const handleStop = () => {
