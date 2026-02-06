@@ -305,14 +305,33 @@ function RuleBasedBetting() {
 
     const market = eligibleMarkets[0];
     const { raceTime, venue, display: venueDisplay } = formatRaceTime(market);
-    
+
     try {
+      // Check if there are existing bets on this market BEFORE placing any new bets
+      const currentOrders = await ordersAPI.getCurrentOrders();
+      const existingBetsOnMarket = currentOrders?.currentOrders?.filter(
+        order => order.marketId === market.marketId
+      ) || [];
+
+      if (existingBetsOnMarket.length > 0) {
+        // Market already has bets - skip it and mark as processed
+        setActivity(prev => [...prev.slice(-9), {
+          time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+          text: `${venue} ${raceTime}: Skipped (${existingBetsOnMarket.length} existing bet${existingBetsOnMarket.length > 1 ? 's' : ''})`,
+          type: 'skip'
+        }]);
+        updateSession({
+          processedMarkets: [...(session.processedMarkets || []), market.marketId]
+        });
+        return;
+      }
+
       const books = await marketsAPI.getBook([market.marketId]);
       const book = books?.[0];
-      
+
       if (!book) {
-        updateSession({ 
-          processedMarkets: [...(session.processedMarkets || []), market.marketId] 
+        updateSession({
+          processedMarkets: [...(session.processedMarkets || []), market.marketId]
         });
         return;
       }
