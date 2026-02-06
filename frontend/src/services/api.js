@@ -109,7 +109,7 @@ export const marketsAPI = {
     const response = await api.post('/api/markets/catalogue', {
       event_type_ids: params.eventTypeIds || ['7'], // Horse racing
       market_type_codes: params.marketTypeCodes || ['WIN'],
-      max_results: params.maxResults || 100,
+      max_results: params.maxResults || 500, // Increased to fetch all GB/IE races
       from_time: params.fromTime,
       to_time: params.toTime,
     });

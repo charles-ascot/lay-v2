@@ -472,19 +472,27 @@ export const useRulesStore = create(
         racesProcessed: 0,
         profitLoss: 0,
         processedMarkets: [],
+        lastResetDate: new Date().toISOString().split('T')[0], // Track when processed markets were last reset
       },
 
-      toggleEnabled: () => set((state) => ({ 
-        isEnabled: !state.isEnabled,
-        isRunning: false, // Stop running when toggling
-        session: !state.isEnabled ? {
-          betsPlaced: 0,
-          totalStaked: 0,
-          racesProcessed: 0,
-          profitLoss: 0,
-          processedMarkets: [],
-        } : state.session
-      })),
+      toggleEnabled: () => set((state) => {
+        const today = new Date().toISOString().split('T')[0];
+        const needsDailyReset = state.session.lastResetDate !== today;
+
+        return {
+          isEnabled: !state.isEnabled,
+          isRunning: false, // Stop running when toggling
+          session: !state.isEnabled ? {
+            betsPlaced: 0,
+            totalStaked: 0,
+            racesProcessed: 0,
+            profitLoss: 0,
+            // Keep processedMarkets unless it's a new day
+            processedMarkets: needsDailyReset ? [] : state.session.processedMarkets,
+            lastResetDate: today,
+          } : state.session
+        };
+      }),
 
       toggleRule: (ruleId) => set((state) => ({
         activeRules: state.activeRules.includes(ruleId)
@@ -518,7 +526,8 @@ export const useRulesStore = create(
           totalStaked: 0,
           racesProcessed: 0,
           profitLoss: 0,
-          processedMarkets: [],
+          processedMarkets: [], // Manual reset clears everything
+          lastResetDate: new Date().toISOString().split('T')[0],
         }
       }),
 
@@ -529,6 +538,10 @@ export const useRulesStore = create(
       partialize: (state) => ({
         activeRules: state.activeRules,
         settings: state.settings,
+        session: {
+          processedMarkets: state.session.processedMarkets,
+          lastResetDate: state.session.lastResetDate,
+        }, // Persist processed markets to prevent duplicate bets
       }),
     }
   )
